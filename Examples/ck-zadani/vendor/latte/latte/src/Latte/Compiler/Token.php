@@ -5,6 +5,8 @@
  * Copyright (c) 2008 David Grudl (https://davidgrudl.com)
  */
 
+declare(strict_types=1);
+
 namespace Latte;
 
 
@@ -15,7 +17,8 @@ class Token
 {
 	use Strict;
 
-	const TEXT = 'text',
+	public const
+		TEXT = 'text',
 		MACRO_TAG = 'macroTag', // latte macro tag
 		HTML_TAG_BEGIN = 'htmlTagBegin', // begin of HTML tag or comment
 		HTML_TAG_END = 'htmlTagEnd', // end of HTML tag or comment
@@ -46,5 +49,4 @@ class Token
 
 	/** @var bool  is tag empty {name/}? used for type MACRO_TAG */
 	public $empty;
-
 }

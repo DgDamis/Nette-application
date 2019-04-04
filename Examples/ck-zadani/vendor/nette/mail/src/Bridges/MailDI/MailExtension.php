@@ -15,15 +15,16 @@ use Nette;
  */
 class MailExtension extends Nette\DI\CompilerExtension
 {
-
 	public $defaults = [
-		'smtp' => FALSE,
-		'host' => NULL,
-		'port' => NULL,
-		'username' => NULL,
-		'password' => NULL,
-		'secure' => NULL,
-		'timeout' => NULL,
+		'smtp' => false,
+		'host' => null,
+		'port' => null,
+		'username' => null,
+		'password' => null,
+		'secure' => null,
+		'timeout' => null,
+		'clientHost' => null,
+		'persistent' => false,
 	];
 
 
@@ -45,5 +46,4 @@ class MailExtension extends Nette\DI\CompilerExtension
 			$builder->addAlias('nette.mailer', $this->prefix('mailer'));
 		}
 	}
-
 }

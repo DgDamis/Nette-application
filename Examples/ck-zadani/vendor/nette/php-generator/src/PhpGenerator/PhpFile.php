@@ -5,10 +5,11 @@
  * Copyright (c) 2004 David Grudl (https://davidgrudl.com)
  */
 
+declare(strict_types=1);
+
 namespace Nette\PhpGenerator;
 
 use Nette;
-use Nette\Utils\Strings;
 
 
 /**
@@ -19,77 +20,19 @@ use Nette\Utils\Strings;
  * - doc comments
  * - one or more namespaces
  */
-class PhpFile
+final class PhpFile
 {
 	use Nette\SmartObject;
-
-	/** @var string|NULL */
-	private $comment;
+	use Traits\CommentAware;
 
 	/** @var PhpNamespace[] */
 	private $namespaces = [];
 
-
-	/**
-	 * @param  string|NULL
-	 * @return static
-	 */
-	public function setComment($val)
-	{
-		$this->comment = $val ? (string) $val : NULL;
-		return $this;
-	}
+	/** @var bool */
+	private $strictTypes = false;
 
 
-	/**
-	 * @return string|NULL
-	 */
-	public function getComment()
-	{
-		return $this->comment;
-	}
-
-
-	/**
-	 * @param  string
-	 * @return static
-	 */
-	public function addComment($val)
-	{
-		$this->comment .= $this->comment ? "\n$val" : $val;
-		return $this;
-	}
-
-
-	/** @deprecated */
-	public function setDocuments(array $s)
-	{
-		trigger_error(__METHOD__ . '() is deprecated, use similar setComment()', E_USER_DEPRECATED);
-		return $this->setComment(implode("\n", $s));
-	}
-
-
-	/** @deprecated */
-	public function getDocuments()
-	{
-		trigger_error(__METHOD__ . '() is deprecated, use similar getComment()', E_USER_DEPRECATED);
-		return $this->comment ? [$this->comment] : [];
-	}
-
-
-	/** @deprecated */
-	public function addDocument($s)
-	{
-		trigger_error(__METHOD__ . '() is deprecated, use addComment()', E_USER_DEPRECATED);
-		return $this->addComment($s);
-	}
-
-
-	/**
-	 * @param  string
-	 * @return ClassType
-	 */
-	public function addClass($name)
+	public function addClass(string $name): ClassType
 	{
 		return $this
 			->addNamespace(Helpers::extractNamespace($name))
@@ -97,11 +40,7 @@ class PhpFile
 	}
 
 
-	/**
-	 * @param  string
-	 * @return ClassType
-	 */
-	public function addInterface($name)
+	public function addInterface(string $name): ClassType
 	{
 		return $this
 			->addNamespace(Helpers::extractNamespace($name))
@@ -109,11 +48,7 @@ class PhpFile
 	}
 
 
-	/**
-	 * @param  string
-	 * @return ClassType
-	 */
-	public function addTrait($name)
+	public function addTrait(string $name): ClassType
 	{
 		return $this
 			->addNamespace(Helpers::extractNamespace($name))
@@ -121,33 +56,60 @@ class PhpFile
 	}
 
 
-	/**
-	 * @param  string NULL means global namespace
-	 * @return PhpNamespace
-	 */
-	public function addNamespace($name)
+	public function addNamespace(string $name): PhpNamespace
 	{
 		if (!isset($this->namespaces[$name])) {
 			$this->namespaces[$name] = new PhpNamespace($name);
+			foreach ($this->namespaces as $namespace) {
+				$namespace->setBracketedSyntax(count($this->namespaces) > 1 && isset($this->namespaces['']));
+			}
 		}
 		return $this->namespaces[$name];
 	}
 
 
 	/**
-	 * @return string PHP code
+	 * @return PhpNamespace[]
 	 */
-	public function __toString()
+	public function getNamespaces(): array
 	{
-		foreach ($this->namespaces as $namespace) {
-			$namespace->setBracketedSyntax(count($this->namespaces) > 1 && isset($this->namespaces[NULL]));
-		}
-
-		return Strings::normalize(
-			"<?php\n"
-			. ($this->comment ? "\n" . Helpers::formatDocComment($this->comment . "\n") . "\n" : '')
-			. implode("\n\n", $this->namespaces)
-		) . "\n";
+		return $this->namespaces;
 	}
 
+
+	/**
+	 * @return static
+	 */
+	public function addUse(string $name, string $alias = null): self
+	{
+		$this->addNamespace('')->addUse($name, $alias);
+		return $this;
+	}
+
+
+	/**
+	 * Adds declare(strict_types=1) to output.
+	 * @return static
+	 */
+	public function setStrictTypes(bool $on = true): self
+	{
+		$this->strictTypes = $on;
+		return $this;
+	}
+
+
+	public function getStrictTypes(): bool
+	{
+		return $this->strictTypes;
+	}
+
+
+	public function __toString(): string
+	{
+		try {
+			return (new Printer)->printFile($this);
+		} catch (\Throwable $e) {
+			trigger_error('Exception in ' . __METHOD__ . "(): {$e->getMessage()} in {$e->getFile()}:{$e->getLine()}", E_USER_ERROR);
+		}
+	}
 }

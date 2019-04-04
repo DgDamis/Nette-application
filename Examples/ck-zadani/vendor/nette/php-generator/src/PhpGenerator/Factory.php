@@ -5,6 +5,8 @@
  * Copyright (c) 2004 David Grudl (https://davidgrudl.com)
  */
 
+declare(strict_types=1);
+
 namespace Nette\PhpGenerator;
 
 use Nette;
@@ -13,22 +15,27 @@ use Nette;
 /**
  * Creates a representation based on reflection.
  */
-class Factory
+final class Factory
 {
 	use Nette\SmartObject;
 
-
-	public function fromClassReflection(\ReflectionClass $from)
+	public function fromClassReflection(\ReflectionClass $from): ClassType
 	{
-		if (PHP_VERSION_ID >= 70000 && $from->isAnonymous()) {
-			$class = new ClassType;
-		} else {
-			$class = new ClassType($from->getShortName(), new PhpNamespace($from->getNamespaceName()));
+		$class = $from->isAnonymous()
+			? new ClassType
+			: new ClassType($from->getShortName(), new PhpNamespace($from->getNamespaceName()));
+		$class->setType($from->isInterface() ? $class::TYPE_INTERFACE : ($from->isTrait() ? $class::TYPE_TRAIT : $class::TYPE_CLASS));
+		$class->setFinal($from->isFinal() && $class->getType() === $class::TYPE_CLASS);
+		$class->setAbstract($from->isAbstract() && $class->getType() === $class::TYPE_CLASS);
+
+		$ifaces = $from->getInterfaceNames();
+		foreach ($ifaces as $iface) {
+			$ifaces = array_filter($ifaces, function (string $item) use ($iface): bool {
+				return !is_subclass_of($iface, $item);
+			});
 		}
-		$class->setType($from->isInterface() ? 'interface' : ($from->isTrait() ? 'trait' : 'class'));
-		$class->setFinal($from->isFinal() && $class->getType() === 'class');
-		$class->setAbstract($from->isAbstract() && $class->getType() === 'class');
-		$class->setImplements($from->getInterfaceNames());
+		$class->setImplements($ifaces);
+
 		$class->setComment(Helpers::unformatDocComment((string) $from->getDocComment()));
 		if ($from->getParentClass()) {
 			$class->setExtends($from->getParentClass()->getName());
@@ -37,87 +44,91 @@ class Factory
 		$props = $methods = [];
 		foreach ($from->getProperties() as $prop) {
 			if ($prop->isDefault() && $prop->getDeclaringClass()->getName() === $from->getName()) {
-				$props[$prop->getName()] = $this->fromPropertyReflection($prop);
+				$props[] = $this->fromPropertyReflection($prop);
 			}
 		}
 		$class->setProperties($props);
 		foreach ($from->getMethods() as $method) {
 			if ($method->getDeclaringClass()->getName() === $from->getName()) {
-				$methods[$method->getName()] = $this->fromFunctionReflection($method)->setNamespace($class->getNamespace());
+				$methods[] = $this->fromMethodReflection($method);
 			}
 		}
 		$class->setMethods($methods);
+		$class->setConstants($from->getConstants());
 		return $class;
 	}
 
 
-	public function fromFunctionReflection(\ReflectionFunctionAbstract $from)
+	public function fromMethodReflection(\ReflectionMethod $from): Method
 	{
-		$method = new Method($from->isClosure() ? NULL : $from->getName());
-		$params = [];
-		foreach ($from->getParameters() as $param) {
-			$params[$param->getName()] = $this->fromParameterReflection($param);
-		}
-		$method->setParameters($params);
-		if ($from instanceof \ReflectionMethod) {
-			$isInterface = $from->getDeclaringClass()->isInterface();
-			$method->setStatic($from->isStatic());
-			$method->setVisibility($from->isPrivate() ? 'private' : ($from->isProtected() ? 'protected' : ($isInterface ? NULL : 'public')));
-			$method->setFinal($from->isFinal());
-			$method->setAbstract($from->isAbstract() && !$isInterface);
-			$method->setBody($from->isAbstract() ? FALSE : '');
-		}
+		$method = new Method($from->getName());
+		$method->setParameters(array_map([$this, 'fromParameterReflection'], $from->getParameters()));
+		$method->setStatic($from->isStatic());
+		$isInterface = $from->getDeclaringClass()->isInterface();
+		$method->setVisibility($from->isPrivate()
+			? ClassType::VISIBILITY_PRIVATE
+			: ($from->isProtected() ? ClassType::VISIBILITY_PROTECTED : ($isInterface ? null : ClassType::VISIBILITY_PUBLIC))
+		);
+		$method->setFinal($from->isFinal());
+		$method->setAbstract($from->isAbstract() && !$isInterface);
+		$method->setBody($from->isAbstract() ? null : '');
 		$method->setReturnReference($from->returnsReference());
 		$method->setVariadic($from->isVariadic());
-		$method->setComment(Helpers::unformatDocComment($from->getDocComment()));
-		if (PHP_VERSION_ID >= 70000 && $from->hasReturnType()) {
-			$method->setReturnType((string) $from->getReturnType());
+		$method->setComment(Helpers::unformatDocComment((string) $from->getDocComment()));
+		if ($from->hasReturnType()) {
+			$method->setReturnType($from->getReturnType()->getName());
 			$method->setReturnNullable($from->getReturnType()->allowsNull());
 		}
 		return $method;
 	}
 
 
-	public function fromParameterReflection(\ReflectionParameter $from)
+	/**
+	 * @return GlobalFunction|Closure
+	 */
+	public function fromFunctionReflection(\ReflectionFunction $from)
+	{
+		$function = $from->isClosure() ? new Closure : new GlobalFunction($from->getName());
+		$function->setParameters(array_map([$this, 'fromParameterReflection'], $from->getParameters()));
+		$function->setReturnReference($from->returnsReference());
+		$function->setVariadic($from->isVariadic());
+		if (!$from->isClosure()) {
+			$function->setComment(Helpers::unformatDocComment((string) $from->getDocComment()));
+		}
+		if ($from->hasReturnType()) {
+			$function->setReturnType($from->getReturnType()->getName());
+			$function->setReturnNullable($from->getReturnType()->allowsNull());
+		}
+		return $function;
+	}
+
+
+	public function fromParameterReflection(\ReflectionParameter $from): Parameter
 	{
 		$param = new Parameter($from->getName());
 		$param->setReference($from->isPassedByReference());
-		if (PHP_VERSION_ID >= 70000) {
-			$param->setTypeHint($from->hasType() ? (string) $from->getType() : NULL);
-			$param->setNullable($from->hasType() && $from->getType()->allowsNull());
-		} elseif ($from->isArray() || $from->isCallable()) {
-			$param->setTypeHint($from->isArray() ? 'array' : 'callable');
-		} else {
-			try {
-				$param->setTypeHint($from->getClass() ? $from->getClass()->getName() : NULL);
-			} catch (\ReflectionException $e) {
-				if (preg_match('#Class (.+) does not exist#', $e->getMessage(), $m)) {
-					$param->setTypeHint($m[1]);
-				} else {
-					throw $e;
-				}
-			}
-		}
+		$param->setTypeHint($from->hasType() ? $from->getType()->getName() : null);
+		$param->setNullable($from->hasType() && $from->getType()->allowsNull());
 		if ($from->isDefaultValueAvailable()) {
-			$param->setOptional(TRUE);
 			$param->setDefaultValue($from->isDefaultValueConstant()
 				? new PhpLiteral($from->getDefaultValueConstantName())
 				: $from->getDefaultValue());
-			$param->setNullable($param->isNullable() && $param->getDefaultValue() !== NULL);
+			$param->setNullable($param->isNullable() && $param->getDefaultValue() !== null);
 		}
 		return $param;
 	}
 
 
-	public function fromPropertyReflection(\ReflectionProperty $from)
+	public function fromPropertyReflection(\ReflectionProperty $from): Property
 	{
 		$prop = new Property($from->getName());
-		$defaults = $from->getDeclaringClass()->getDefaultProperties();
-		$prop->setValue(isset($defaults[$prop->getName()]) ? $defaults[$prop->getName()] : NULL);
+		$prop->setValue($from->getDeclaringClass()->getDefaultProperties()[$prop->getName()] ?? null);
 		$prop->setStatic($from->isStatic());
-		$prop->setVisibility($from->isPrivate() ? 'private' : ($from->isProtected() ? 'protected' : 'public'));
-		$prop->setComment(Helpers::unformatDocComment($from->getDocComment()));
+		$prop->setVisibility($from->isPrivate()
+			? ClassType::VISIBILITY_PRIVATE
+			: ($from->isProtected() ? ClassType::VISIBILITY_PROTECTED : ClassType::VISIBILITY_PUBLIC)
+		);
+		$prop->setComment(Helpers::unformatDocComment((string) $from->getDocComment()));
 		return $prop;
 	}
-
 }

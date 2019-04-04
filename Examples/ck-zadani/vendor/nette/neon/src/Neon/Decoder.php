@@ -5,6 +5,8 @@
  * Copyright (c) 2004 David Grudl (https://davidgrudl.com)
  */
 
+declare(strict_types=1);
+
 namespace Nette\Neon;
 
 
@@ -12,11 +14,8 @@ namespace Nette\Neon;
  * Parser for Nette Object Notation.
  * @internal
  */
-class Decoder
+final class Decoder
 {
-	/** @deprecated */
-	public static $patterns = self::PATTERNS;
-
 	const PATTERNS = [
 		'
 			\'\'\'\n (?:(?: [^\n] | \n(?![\t\ ]*+\'\'\') )*+ \n)?[\t\ ]*+\'\'\' |
@@ -55,7 +54,7 @@ class Decoder
 	];
 
 	const ESCAPE_SEQUENCES = [
-		't' => "\t", 'n' => "\n", 'r' => "\r", 'f' => "\x0C", 'b' => "\x08", '"' => '"', '\\' => '\\', '/' => '/', '_' => "\xc2\xa0",
+		't' => "\t", 'n' => "\n", 'r' => "\r", 'f' => "\x0C", 'b' => "\x08", '"' => '"', '\\' => '\\', '/' => '/', '_' => "\u{A0}",
 	];
 
 	const BRACKETS = [
@@ -74,18 +73,16 @@ class Decoder
 	private $pos;
 
 
-
 	/**
 	 * Decodes a NEON string.
-	 * @param  string
 	 * @return mixed
 	 */
-	public function decode($input)
+	public function decode(string $input)
 	{
 		if (!is_string($input)) {
 			throw new \InvalidArgumentException(sprintf('Argument must be a string, %s given.', gettype($input)));
 
-		} elseif (substr($input, 0, 3) === "\xEF\xBB\xBF") { // BOM
+		} elseif (substr($input, 0, 3) === "\u{FEFF}") { // BOM
 			$input = substr($input, 3);
 		}
 		$this->input = "\n" . str_replace("\r", '', $input); // \n forces indent detection
@@ -100,7 +97,7 @@ class Decoder
 		}
 
 		$this->pos = 0;
-		$res = $this->parse(NULL);
+		$res = $this->parse(null);
 
 		while (isset($this->tokens[$this->pos])) {
 			if ($this->tokens[$this->pos][0][0] === "\n") {
@@ -114,15 +111,14 @@ class Decoder
 
 
 	/**
-	 * @param  string  indentation (for block-parser)
-	 * @param  mixed
-	 * @return array
+	 * @param  string|bool|null  $indent  indentation (for block-parser)
+	 * @return mixed
 	 */
-	private function parse($indent, $result = NULL, $key = NULL, $hasKey = FALSE)
+	private function parse($indent, array $result = null, $key = null, bool $hasKey = false)
 	{
-		$inlineParser = $indent === FALSE;
-		$value = NULL;
-		$hasValue = FALSE;
+		$inlineParser = $indent === false;
+		$value = null;
+		$hasValue = false;
 		$tokens = $this->tokens;
 		$n = &$this->pos;
 		$count = count($tokens);
@@ -135,16 +131,16 @@ class Decoder
 				if ((!$hasKey && !$hasValue) || !$inlineParser) {
 					$this->error();
 				}
-				$this->addValue($result, $hasKey ? $key : NULL, $hasValue ? $value : NULL);
-				$hasKey = $hasValue = FALSE;
+				$this->addValue($result, $hasKey ? $key : null, $hasValue ? $value : null);
+				$hasKey = $hasValue = false;
 
 			} elseif ($t === ':' || $t === '=') { // KeyValuePair separator
 				if ($hasValue && (is_array($value) || is_object($value))) {
 					$this->error('Unacceptable key');
 
-				} elseif ($hasKey && $key === NULL && $hasValue && !$inlineParser) {
+				} elseif ($hasKey && $key === null && $hasValue && !$inlineParser) {
 					$n++;
-					$result[] = $this->parse($indent . '  ', [], $value, TRUE);
+					$result[] = $this->parse($indent . '  ', [], $value, true);
 					$newIndent = isset($tokens[$n], $tokens[$n + 1]) ? (string) substr($tokens[$n][0], 1) : ''; // not last
 					if (strlen($newIndent) > strlen($indent)) {
 						$n++;
@@ -152,15 +148,15 @@ class Decoder
 					} elseif (strlen($newIndent) < strlen($indent)) {
 						return $mainResult; // block parser exit point
 					}
-					$hasKey = $hasValue = FALSE;
+					$hasKey = $hasValue = false;
 
 				} elseif ($hasKey || !$hasValue) {
 					$this->error();
 
 				} else {
 					$key = (string) $value;
-					$hasKey = TRUE;
-					$hasValue = FALSE;
+					$hasKey = true;
+					$hasValue = false;
 					$result = &$mainResult;
 				}
 
@@ -168,25 +164,25 @@ class Decoder
 				if ($hasKey || $hasValue || $inlineParser) {
 					$this->error();
 				}
-				$key = NULL;
-				$hasKey = TRUE;
+				$key = null;
+				$hasKey = true;
 
-			} elseif (($tmp = self::BRACKETS) && isset($tmp[$t])) { // Opening bracket [ ( {
+			} elseif (isset(self::BRACKETS[$t])) { // Opening bracket [ ( {
 				if ($hasValue) {
 					if ($t !== '(') {
 						$this->error();
 					}
 					$n++;
 					if ($value instanceof Entity && $value->value === Neon::CHAIN) {
-						end($value->attributes)->attributes = $this->parse(FALSE, []);
+						end($value->attributes)->attributes = $this->parse(false, []);
 					} else {
-						$value = new Entity($value, $this->parse(FALSE, []));
+						$value = new Entity($value, $this->parse(false, []));
 					}
 				} else {
 					$n++;
-					$value = $this->parse(FALSE, []);
+					$value = $this->parse(false, []);
 				}
-				$hasValue = TRUE;
+				$hasValue = true;
 				if (!isset($tokens[$n]) || $tokens[$n][0] !== self::BRACKETS[$t]) { // unexpected type of bracket or block-parser
 					$this->error();
 				}
@@ -200,8 +196,8 @@ class Decoder
 			} elseif ($t[0] === "\n") { // Indent
 				if ($inlineParser) {
 					if ($hasKey || $hasValue) {
-						$this->addValue($result, $hasKey ? $key : NULL, $hasValue ? $value : NULL);
-						$hasKey = $hasValue = FALSE;
+						$this->addValue($result, $hasKey ? $key : null, $hasValue ? $value : null);
+						$hasKey = $hasValue = false;
 					}
 
 				} else {
@@ -213,7 +209,7 @@ class Decoder
 					}
 
 					$newIndent = (string) substr($tokens[$n][0], 1);
-					if ($indent === NULL) { // first iteration
+					if ($indent === null) { // first iteration
 						$indent = $newIndent;
 					}
 					$minlen = min(strlen($newIndent), strlen($indent));
@@ -233,18 +229,18 @@ class Decoder
 							$n++;
 							$this->error('Bad indentation');
 						}
-						$hasKey = FALSE;
+						$hasKey = false;
 
 					} else {
-						if ($hasValue && !$hasKey) { // block items must have "key"; NULL key means list item
+						if ($hasValue && !$hasKey) { // block items must have "key"; null key means list item
 							break;
 
 						} elseif ($hasKey) {
-							$this->addValue($result, $key, $hasValue ? $value : NULL);
-							if ($key !== NULL && !$hasValue && $newIndent === $indent && isset($tokens[$n + 1]) && $tokens[$n + 1][0] === '-') {
+							$this->addValue($result, $key, $hasValue ? $value : null);
+							if ($key !== null && !$hasValue && $newIndent === $indent && isset($tokens[$n + 1]) && $tokens[$n + 1][0] === '-') {
 								$result = &$result[$key];
 							}
-							$hasKey = $hasValue = FALSE;
+							$hasKey = $hasValue = false;
 						}
 					}
 
@@ -291,24 +287,24 @@ class Decoder
 					}
 				} else {
 					$value = $converted;
-					$hasValue = TRUE;
+					$hasValue = true;
 				}
 			}
 		}
 
 		if ($inlineParser) {
 			if ($hasKey || $hasValue) {
-				$this->addValue($result, $hasKey ? $key : NULL, $hasValue ? $value : NULL);
+				$this->addValue($result, $hasKey ? $key : null, $hasValue ? $value : null);
 			}
 		} else {
 			if ($hasValue && !$hasKey) { // block items must have "key"
-				if ($result === NULL) {
+				if ($result === null) {
 					$result = $value; // simple value parser
 				} else {
 					$this->error();
 				}
 			} elseif ($hasKey) {
-				$this->addValue($result, $key, $hasValue ? $value : NULL);
+				$this->addValue($result, $key, $hasValue ? $value : null);
 			}
 		}
 		return $mainResult;
@@ -317,7 +313,7 @@ class Decoder
 
 	private function addValue(&$result, $key, $value)
 	{
-		if ($key === NULL) {
+		if ($key === null) {
 			$result[] = $value;
 		} elseif ($result && array_key_exists($key, $result)) {
 			$this->error("Duplicated key '$key'");
@@ -327,7 +323,7 @@ class Decoder
 	}
 
 
-	private function cbString($m)
+	private function cbString(array $m): string
 	{
 		$sq = $m[0];
 		if (($fix56 = self::ESCAPE_SEQUENCES) && isset($fix56[$sq[1]])) { // workaround for PHP 5.6
@@ -344,13 +340,14 @@ class Decoder
 			return chr(hexdec(substr($sq, 2)));
 		} else {
 			$this->error("Invalid escaping sequence $sq");
+			return '';
 		}
 	}
 
 
-	private function error($message = "Unexpected '%s'")
+	private function error(string $message = "Unexpected '%s'")
 	{
-		$last = isset($this->tokens[$this->pos]) ? $this->tokens[$this->pos] : NULL;
+		$last = isset($this->tokens[$this->pos]) ? $this->tokens[$this->pos] : null;
 		$offset = $last ? $last[1] : strlen($this->input);
 		$text = substr($this->input, 0, $offset);
 		$line = substr_count($text, "\n");
@@ -358,5 +355,4 @@ class Decoder
 		$token = $last ? str_replace("\n", '<new line>', substr($last[0], 0, 40)) : 'end';
 		throw new Exception(str_replace('%s', $token, $message) . " on line $line, column $col.");
 	}
-
 }

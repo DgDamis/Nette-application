@@ -1,6 +1,7 @@
 {
 	"name": "nette/application",
-	"description": "Nette Application MVC Component",
+	"description": "🏆 Nette Application: a full-stack component-based MVC kernel for PHP that helps you write powerful and modern web applications. Write less, have cleaner code and your work will bring you joy.",
+	"keywords": ["nette", "mvc", "framework", "component-based", "routing", "seo", "mvp", "presenter", "control", "forms"],
 	"homepage": "https://nette.org",
 	"license": ["BSD-3-Clause", "GPL-2.0", "GPL-3.0"],
 	"authors": [
@@ -26,7 +27,7 @@
 	},
 	"require-dev": {
 		"nette/tester": "^2.0",
-		"nette/di": "^2.4 || ~3.0.0",
+		"nette/di": "^2.4",
 		"nette/forms": "^2.4",
 		"nette/robot-loader": "^2.4.2 || ^3.0",
 		"nette/security": "^2.4",

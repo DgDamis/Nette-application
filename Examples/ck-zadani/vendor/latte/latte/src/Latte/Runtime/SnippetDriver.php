@@ -5,6 +5,8 @@
  * Copyright (c) 2008 David Grudl (https://davidgrudl.com)
  */
 
+declare(strict_types=1);
+
 namespace Latte\Runtime;
 
 use Latte;
@@ -18,7 +20,8 @@ class SnippetDriver
 {
 	use Latte\Strict;
 
-	const TYPE_STATIC = 'static',
+	public const
+		TYPE_STATIC = 'static',
 		TYPE_DYNAMIC = 'dynamic',
 		TYPE_AREA = 'area';
 
@@ -29,7 +32,7 @@ class SnippetDriver
 	private $nestingLevel = 0;
 
 	/** @var bool */
-	private $renderingSnippets = FALSE;
+	private $renderingSnippets = false;
 
 	/** @var ISnippetBridge */
 	private $bridge;
@@ -41,18 +44,19 @@ class SnippetDriver
 	}
 
 
-	public function enter($name, $type)
+	public function enter(string $name, string $type): void
 	{
 		if (!$this->renderingSnippets) {
 			return;
 		}
-		$obStarted = FALSE;
-		if (($this->nestingLevel === 0 && $this->bridge->needsRedraw($name))
-			|| ($type === self::TYPE_DYNAMIC && ($previous = end($this->stack)) && $previous[1] === TRUE)
+		$obStarted = false;
+		if (
+			($this->nestingLevel === 0 && $this->bridge->needsRedraw($name))
+			|| ($type === self::TYPE_DYNAMIC && ($previous = end($this->stack)) && $previous[1] === true)
 		) {
 			ob_start(function () {});
 			$this->nestingLevel = $type === self::TYPE_AREA ? 0 : 1;
-			$obStarted = TRUE;
+			$obStarted = true;
 		} elseif ($this->nestingLevel > 0) {
 			$this->nestingLevel++;
 		}
@@ -61,12 +65,12 @@ class SnippetDriver
 	}
 
 
-	public function leave()
+	public function leave(): void
 	{
 		if (!$this->renderingSnippets) {
 			return;
 		}
-		list($name, $obStarted) = array_pop($this->stack);
+		[$name, $obStarted] = array_pop($this->stack);
 		if ($this->nestingLevel > 0 && --$this->nestingLevel === 0) {
 			$content = ob_get_clean();
 			$this->bridge->addSnippet($name, $content);
@@ -76,19 +80,19 @@ class SnippetDriver
 	}
 
 
-	public function getHtmlId($name)
+	public function getHtmlId(string $name): string
 	{
 		return $this->bridge->getHtmlId($name);
 	}
 
 
-	public function renderSnippets(array $blocks, array $params)
+	public function renderSnippets(array $blocks, array $params): bool
 	{
 		if ($this->renderingSnippets || !$this->bridge->isSnippetMode()) {
-			return FALSE;
+			return false;
 		}
-		$this->renderingSnippets = TRUE;
-		$this->bridge->setSnippetMode(FALSE);
+		$this->renderingSnippets = true;
+		$this->bridge->setSnippetMode(false);
 		foreach ($blocks as $name => $function) {
 			if ($name[0] !== '_' || !$this->bridge->needsRedraw(substr($name, 1))) {
 				continue;
@@ -96,9 +100,8 @@ class SnippetDriver
 			$function = reset($function);
 			$function($params);
 		}
-		$this->bridge->setSnippetMode(TRUE);
+		$this->bridge->setSnippetMode(true);
 		$this->bridge->renderChildren();
-		return TRUE;
+		return true;
 	}
-
 }

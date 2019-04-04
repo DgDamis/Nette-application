@@ -5,24 +5,23 @@
  * Copyright (c) 2004 David Grudl (https://davidgrudl.com)
  */
 
+declare(strict_types=1);
+
 namespace Nette\Neon;
 
 
 /**
  * Simple generator for Nette Object Notation.
  */
-class Encoder
+final class Encoder
 {
 	const BLOCK = 1;
 
 
 	/**
 	 * Returns the NEON representation of a value.
-	 * @param  mixed
-	 * @param  int
-	 * @return string
 	 */
-	public function encode($var, $options = NULL)
+	public function encode($var, int $flags = 0): string
 	{
 		if ($var instanceof \DateTimeInterface) {
 			return $var->format('Y-m-d H:i:s O');
@@ -46,14 +45,14 @@ class Encoder
 		if (is_array($var)) {
 			$isList = !$var || array_keys($var) === range(0, count($var) - 1);
 			$s = '';
-			if ($options & self::BLOCK) {
+			if ($flags & self::BLOCK) {
 				if (count($var) === 0) {
 					return '[]';
 				}
 				foreach ($var as $k => $v) {
 					$v = $this->encode($v, self::BLOCK);
 					$s .= ($isList ? '-' : $this->encode($k) . ':')
-						. (strpos($v, "\n") === FALSE
+						. (strpos($v, "\n") === false
 							? ' ' . $v . "\n"
 							: "\n" . preg_replace('#^(?=.)#m', "\t", $v) . (substr($v, -2, 1) === "\n" ? '' : "\n"));
 				}
@@ -66,7 +65,9 @@ class Encoder
 				return ($isList ? '[' : '{') . substr($s, 0, -2) . ($isList ? ']' : '}');
 			}
 
-		} elseif (is_string($var) && !is_numeric($var)
+		} elseif (
+			is_string($var)
+			&& !is_numeric($var)
 			&& !preg_match('~[\x00-\x1F]|^\d{4}|^(true|false|yes|no|on|off|null)\z~i', $var)
 			&& preg_match('~^' . Decoder::PATTERNS[1] . '\z~x', $var) // 1 = literals
 		) {
@@ -74,11 +75,10 @@ class Encoder
 
 		} elseif (is_float($var)) {
 			$var = json_encode($var);
-			return strpos($var, '.') === FALSE ? $var . '.0' : $var;
+			return strpos($var, '.') === false ? $var . '.0' : $var;
 
 		} else {
 			return json_encode($var, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 		}
 	}
-
 }

@@ -5,191 +5,70 @@
  * Copyright (c) 2004 David Grudl (https://davidgrudl.com)
  */
 
+declare(strict_types=1);
+
 namespace Nette\PhpGenerator;
 
 use Nette;
 
 
 /**
- * Method or function description.
+ * Class method.
  *
- * @property string $body
+ * @property string|null $body
  */
-class Method extends Member
+final class Method
 {
-	/** @var array of name => Parameter */
-	private $parameters = [];
+	use Nette\SmartObject;
+	use Traits\FunctionLike;
+	use Traits\NameAware;
+	use Traits\VisibilityAware;
+	use Traits\CommentAware;
 
-	/** @var array of name => bool */
-	private $uses = [];
-
-	/** @var string|FALSE */
+	/** @var string|null */
 	private $body = '';
 
 	/** @var bool */
-	private $static = FALSE;
+	private $static = false;
 
 	/** @var bool */
-	private $final = FALSE;
+	private $final = false;
 
 	/** @var bool */
-	private $abstract = FALSE;
+	private $abstract = false;
 
-	/** @var bool */
-	private $returnReference = FALSE;
 
-	/** @var bool */
-	private $variadic = FALSE;
+	/**
+	 * @param  string|array  $method
+	 * @return static
+	 */
+	public static function from($method): self
+	{
+		return (new Factory)->fromMethodReflection(Nette\Utils\Callback::toReflection($method));
+	}
 
-	/** @var PhpNamespace|NULL */
-	private $namespace;
 
-	/** @var string|NULL */
-	private $returnType;
-
-	/** @var bool */
-	private $returnNullable;
+	public function __toString(): string
+	{
+		try {
+			return (new Printer)->printMethod($this);
+		} catch (\Throwable $e) {
+			trigger_error('Exception in ' . __METHOD__ . "(): {$e->getMessage()} in {$e->getFile()}:{$e->getLine()}", E_USER_ERROR);
+		}
+	}
 
 
 	/**
 	 * @return static
 	 */
-	public static function from($from)
+	public function setBody(?string $code, array $args = null): self
 	{
-		return (new Factory)->fromFunctionReflection(
-			$from instanceof \ReflectionFunctionAbstract ? $from : Nette\Utils\Callback::toReflection($from)
-		);
-	}
-
-
-	/**
-	 * @param  string|NULL
-	 */
-	public function __construct($name = NULL)
-	{
-		$this->setName($name);
-	}
-
-
-	/**
-	 * @return string  PHP code
-	 */
-	public function __toString()
-	{
-		$parameters = [];
-		foreach ($this->parameters as $param) {
-			$variadic = $this->variadic && $param === end($this->parameters);
-			$hint = $param->getTypeHint();
-			$parameters[] = ($hint ? ($param->isNullable() ? '?' : '') . ($this->namespace ? $this->namespace->unresolveName($hint) : $hint) . ' ' : '')
-				. ($param->isReference() ? '&' : '')
-				. ($variadic ? '...' : '')
-				. '$' . $param->getName()
-				. ($param->hasDefaultValue() && !$variadic ? ' = ' . Helpers::dump($param->defaultValue) : '');
-		}
-		$uses = [];
-		foreach ($this->uses as $param) {
-			$uses[] = ($param->isReference() ? '&' : '') . '$' . $param->getName();
-		}
-
-		return Helpers::formatDocComment($this->getComment() . "\n")
-			. ($this->abstract ? 'abstract ' : '')
-			. ($this->final ? 'final ' : '')
-			. ($this->getVisibility() ? $this->getVisibility() . ' ' : '')
-			. ($this->static ? 'static ' : '')
-			. 'function '
-			. ($this->returnReference ? '&' : '')
-			. $this->getName()
-			. '(' . implode(', ', $parameters) . ')'
-			. ($this->uses ? ' use (' . implode(', ', $uses) . ')' : '')
-			. ($this->returnType ? ': ' . ($this->returnNullable ? '?' : '')
-				. ($this->namespace ? $this->namespace->unresolveName($this->returnType) : $this->returnType) : '')
-			. ($this->abstract || $this->body === FALSE ? ';'
-				: ($this->getName() ? "\n" : ' ') . "{\n" . Nette\Utils\Strings::indent(ltrim(rtrim($this->body) . "\n"), 1) . '}');
-	}
-
-
-	/**
-	 * @param  Parameter[]
-	 * @return static
-	 */
-	public function setParameters(array $val)
-	{
-		$this->parameters = [];
-		foreach ($val as $v) {
-			if (!$v instanceof Parameter) {
-				throw new Nette\InvalidArgumentException('Argument must be Nette\PhpGenerator\Parameter[].');
-			}
-			$this->parameters[$v->getName()] = $v;
-		}
+		$this->body = $args === null || $code === null ? $code : Helpers::format($code, ...$args);
 		return $this;
 	}
 
 
-	/**
-	 * @return Parameter[]
-	 */
-	public function getParameters()
-	{
-		return $this->parameters;
-	}
-
-
-	/**
-	 * @param  string  without $
-	 * @return Parameter
-	 */
-	public function addParameter($name, $defaultValue = NULL)
-	{
-		$param = new Parameter($name);
-		if (func_num_args() > 1) {
-			$param->setOptional(TRUE)->setDefaultValue($defaultValue);
-		}
-		return $this->parameters[$name] = $param;
-	}
-
-
-	/**
-	 * @return static
-	 */
-	public function setUses(array $val)
-	{
-		$this->uses = $val;
-		return $this;
-	}
-
-
-	/**
-	 * @return array
-	 */
-	public function getUses()
-	{
-		return $this->uses;
-	}
-
-
-	/**
-	 * @return Parameter
-	 */
-	public function addUse($name)
-	{
-		return $this->uses[] = new Parameter($name);
-	}
-
-
-	/**
-	 * @return static
-	 */
-	public function setBody($code, array $args = NULL)
-	{
-		$this->body = $args === NULL ? $code : Helpers::formatArgs($code, $args);
-		return $this;
-	}
-
-
-	/**
-	 * @return string
-	 */
-	public function getBody()
+	public function getBody(): ?string
 	{
 		return $this->body;
 	}
@@ -198,160 +77,58 @@ class Method extends Member
 	/**
 	 * @return static
 	 */
-	public function addBody($code, array $args = NULL)
+	public function setStatic(bool $state = true): self
 	{
-		$this->body .= ($args === NULL ? $code : Helpers::formatArgs($code, $args)) . "\n";
+		$this->static = $state;
 		return $this;
 	}
 
 
-	/**
-	 * @param  bool
-	 * @return static
-	 */
-	public function setStatic($val)
-	{
-		$this->static = (bool) $val;
-		return $this;
-	}
-
-
-	/**
-	 * @return bool
-	 */
-	public function isStatic()
+	public function isStatic(): bool
 	{
 		return $this->static;
 	}
 
 
 	/**
-	 * @param  bool
 	 * @return static
 	 */
-	public function setFinal($val)
+	public function setFinal(bool $state = true): self
 	{
-		$this->final = (bool) $val;
+		$this->final = $state;
 		return $this;
 	}
 
 
-	/**
-	 * @return bool
-	 */
-	public function isFinal()
+	public function isFinal(): bool
 	{
 		return $this->final;
 	}
 
 
 	/**
-	 * @param  bool
 	 * @return static
 	 */
-	public function setAbstract($val)
+	public function setAbstract(bool $state = true): self
 	{
-		$this->abstract = (bool) $val;
+		$this->abstract = $state;
 		return $this;
 	}
 
 
-	/**
-	 * @return bool
-	 */
-	public function isAbstract()
+	public function isAbstract(): bool
 	{
 		return $this->abstract;
 	}
 
 
 	/**
-	 * @param  bool
-	 * @return static
+	 * @throws Nette\InvalidStateException
 	 */
-	public function setReturnReference($val)
+	public function validate(): void
 	{
-		$this->returnReference = (bool) $val;
-		return $this;
+		if ($this->abstract && ($this->final || $this->visibility === ClassType::VISIBILITY_PRIVATE)) {
+			throw new Nette\InvalidStateException('Method cannot be abstract and final or private.');
+		}
 	}
-
-
-	/**
-	 * @return bool
-	 */
-	public function getReturnReference()
-	{
-		return $this->returnReference;
-	}
-
-
-	/**
-	 * @param  bool
-	 * @return static
-	 */
-	public function setReturnNullable($val)
-	{
-		$this->returnNullable = (bool) $val;
-		return $this;
-	}
-
-
-	/**
-	 * @return bool
-	 */
-	public function getReturnNullable()
-	{
-		return $this->returnNullable;
-	}
-
-
-	/**
-	 * @param  bool
-	 * @return static
-	 */
-	public function setVariadic($val)
-	{
-		$this->variadic = (bool) $val;
-		return $this;
-	}
-
-
-	/**
-	 * @return bool
-	 */
-	public function isVariadic()
-	{
-		return $this->variadic;
-	}
-
-
-	/**
-	 * @return static
-	 */
-	public function setNamespace(PhpNamespace $val = NULL)
-	{
-		$this->namespace = $val;
-		return $this;
-	}
-
-
-	/**
-	 * @param  string|NULL
-	 * @return static
-	 */
-	public function setReturnType($val)
-	{
-		$this->returnType = $val ? (string) $val : NULL;
-		return $this;
-	}
-
-
-	/**
-	 * @return string|NULL
-	 */
-	public function getReturnType()
-	{
-		return $this->returnType;
-	}
-
 }
