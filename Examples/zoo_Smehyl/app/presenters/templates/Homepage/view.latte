@@ -1,0 +1,28 @@
+{* This is the welcome page, you can delete it *}
+
+{block content}
+<div class="container">
+    <div class="col-sm-6">
+        <h2>{$akce->summary}</h2>
+        <p>{$akce->description}</p>
+        <hr>
+        <p>Typ akce: {$akce->type}</p>
+        <p>Konání akce: {$akce->date|date:'j.n.Y'},{$akce->time|date:'%H:%i'}</p>
+        <p>Počet účastníků: {$akce->visitors}</p>
+    </div>
+    <div class="col-sm-6">
+        <img src="/images/mapa.jpg" class="img-responsive">Orientační plán ZOO</img>
+    </div>
+    <div class="col-sm-2">
+    <a n:href="default " class="text text-left">Zpět</a>
+    </div>
+</div>    
+{/block}
+
+{block scripts}
+{include parent}
+{/block}
+
+
+{block head}
+{/block}

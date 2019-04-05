@@ -1,0 +1,19 @@
+{* This is the welcome page, you can delete it *}
+
+{block content}
+<div class="container">
+    Obsah hlavní stránky
+    test
+    {foreach SeznamAkci as akce}
+        {$akce->nazev}
+    {/foreach}
+</div>    
+{/block}
+
+{block scripts}
+{include parent}
+{/block}
+
+
+{block head}
+{/block}
