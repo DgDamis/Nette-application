@@ -1,0 +1,8 @@
+{* Latte template *}
+
+{block content}
+<div class="container">
+ <h2>{$zajezd->destinace|upper}</h2>
+ <p>Datum: {$zajezd->datum|date:'j. n. Y'}</p>
+ <p>Počet nocí: {$zajezd->delka}, cena: {$zajezd->cena} Kč</p>
+</div>

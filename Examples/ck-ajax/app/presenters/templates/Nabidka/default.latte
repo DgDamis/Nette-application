@@ -1,0 +1,32 @@
+{* This is the welcome page, you can delete it *}
+
+{block content}
+<div class="container">
+    <h1>Nabídka pobytových zájezdů</h1>
+    <table class="table table-bordered">
+        <thead>
+            <tr>
+                <th><a n:href="Nabidka:default 'destinace'">Destinace</a></th>
+                <th><a n:href="default 'datum DESC'">Den odjezdu</a></th>
+                <th><a n:href="default 'delka'">Počet nocí</a></th>
+                <th><a n:href="default 'cena DESC'">Cena</a></th>
+                <th>Akce</th>
+            </tr>
+        </thead>
+        <tbody>
+            {foreach $zajezdy as $zajezd}
+                <tr>
+                    <td><a n:href="view $zajezd->id">{$zajezd->destinace|upper}</a></td>
+                    <td class='text-right'>{$zajezd->datum|date:'j. n. Y'}</td>
+                    <td class='text-right'>{$zajezd->delka}</td>
+                    <td class='text-right'>{$zajezd->cena} Kč</td>
+                    <td><a n:href="update $zajezd->id" class='btn btn-default'>Upravit</a>
+                        <a n:href="delete $zajezd->id" class='btn btn-default'>Smazat</a>
+                    </td>
+                </tr>
+            {/foreach}
+        </tbody>
+        <table>
+           <a n:href="create" class='btn btn-default'>Nový záznam</a>
+      </div>    
+            {/block}
